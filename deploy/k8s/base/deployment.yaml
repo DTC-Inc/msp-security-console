@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: msp-security-console }
+spec:
+  # One replica on SQLite, the base's store: one file on a ReadWriteOnce volume, and one process writes it.
+  # Recreate, so the old pod lets go of the volume before the new one mounts it; an upgrade is a short gap, not two
+  # writers. With PostgreSQL (DATABASE_URL), and only then, an overlay may raise replicas and switch to RollingUpdate:
+  # the replicas share the jobs through their leases in the database, and nothing lives on the pod. The overlay's patch
+  # (no DATABASE_PATH, no volume or PVC, DATABASE_URL_FILE from the Secret, 5432 out) is in docs/design.md, "Deploying
+  # it yourself".
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/component: server } }
+  template:
+    metadata: { labels: { app.kubernetes.io/component: server } }
+    spec:
+      automountServiceAccountToken: false
+      # fsGroup: the volume is the console user's group's, so it can write there (and no one else in the pod can).
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, fsGroupChangePolicy: OnRootMismatch, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: server
+          image: msp-security-console
+          ports: [{ name: http, containerPort: 8080 }]
+          envFrom: [{ configMapRef: { name: msp-security-console } }]
+          env:
+            # Every secret is a file from the Secret, never an environment value. A _FILE that names a missing file
+            # refuses to start (it reads as a mistake, not as "off"), so an overlay removes the line for a connector
+            # it doesn't use, and keeps the key in the Secret for one it does.
+            - { name: NINJA_CLIENT_SECRET_FILE, value: /var/run/secrets/msp-console/ninja-client-secret }
+            - { name: HALO_CLIENT_SECRET_FILE, value: /var/run/secrets/msp-console/halo-client-secret }
+            - { name: NVD_API_KEY_FILE, value: /var/run/secrets/msp-console/nvd-api-key }
+            - { name: BLACKPOINT_API_TOKEN_FILE, value: /var/run/secrets/msp-console/blackpoint-api-token }
+            - { name: SHODAN_API_KEY_FILE, value: /var/run/secrets/msp-console/shodan-api-key }
+            # The master key that decrypts the secrets in a config file saved by the setup wizard: 32 random bytes,
+            # base64, in the Secret as master-key (`openssl rand -base64 32`). It's read only when a config file holds an
+            # encrypted value, so without one (the default here) it needn't exist. Keep it in the Secret, never on a
+            # volume beside the config file, and never an emptyDir: a lost key means entering every secret again.
+            - { name: CONSOLE_MASTER_KEY_FILE, value: /var/run/secrets/msp-console/master-key }
+            # No config file on Kubernetes by default: the ConfigMap and Secret are the configuration.
+            - { name: CONFIG_PATH, value: /var/run/secrets/msp-console/none.json }
+            # SQLite's file on the volume below. A PostgreSQL overlay deletes this line (DATABASE_URL and DATABASE_PATH
+            # together refuse to start) and adds DATABASE_URL_FILE: /var/run/secrets/msp-console/database-url.
+            - { name: DATABASE_PATH, value: /data/console.db }
+          volumeMounts:
+            - { name: secrets, mountPath: /var/run/secrets/msp-console, readOnly: true }
+            - { name: data, mountPath: /data }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          # Measured peak with the embedder at work (one 512-token description and a batch of 32, EMBED_THREADS=1): 136 MB.
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+      volumes:
+        - name: secrets
+          secret: { secretName: msp-security-console }
+        - name: data
+          persistentVolumeClaim: { claimName: msp-security-console-data }

@@ -1,0 +1,12 @@
+**/node_modules
+**/target
+web/dist
+.git
+deploy
+docs
+dev
+*.md
+!THIRD_PARTY.md
+# Model files are fetched by pinned hash in the image build (scripts/fetch-model.sh), never copied in from a checkout.
+models/
+*.onnx

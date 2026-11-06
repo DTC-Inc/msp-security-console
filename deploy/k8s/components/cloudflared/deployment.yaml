@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: msp-security-console-cloudflared }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app.kubernetes.io/component: cloudflared } }
+  template:
+    metadata: { labels: { app.kubernetes.io/component: cloudflared } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: cloudflared
+          image: docker.io/cloudflare/cloudflared:2026.10.4   # the overlay pins the digest
+          args: [tunnel, --no-autoupdate, --metrics, "0.0.0.0:2000", run]
+          env: [{ name: TUNNEL_TOKEN, valueFrom: { secretKeyRef: { name: msp-security-console, key: tunnel-token } } }]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { cpu: 200m, memory: 256Mi } }
+          livenessProbe: { httpGet: { path: /ready, port: 2000 }, periodSeconds: 20 }

@@ -1,0 +1,7 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: msp-security-console }
+spec:
+  rules:
+    - host: security.example.com   # the overlay sets the host, the class and TLS
+      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: msp-security-console, port: { name: http } } } }] }

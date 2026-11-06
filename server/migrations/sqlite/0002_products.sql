@@ -1,0 +1,25 @@
+-- The curated product map, the 22 products the console starts with: which
+-- inventory entries are which product, and what NVD calls it. Adding a product is a new migration with a row, not code.
+INSERT INTO sec_product (product_key, label, cpe, match, sort_order) VALUES
+  ('chrome', 'Google Chrome', 'google:chrome', '{"name_re": "^Google Chrome$"}', 10),
+  ('edge', 'Microsoft Edge', 'microsoft:edge_chromium', '{"name_re": "^Microsoft Edge$"}', 20),
+  ('firefox_esr', 'Mozilla Firefox ESR', 'mozilla:firefox_esr', '{"name_re": "^Mozilla Firefox.*\\bESR\\b"}', 30),
+  ('firefox', 'Mozilla Firefox', 'mozilla:firefox', '{"name_re": "^Mozilla Firefox\\b"}', 40),
+  ('7zip', '7-Zip', '7-zip:7-zip', '{"name_re": "^7-Zip \\d"}', 50),
+  ('winrar', 'WinRAR', 'rarlab:winrar', '{"name_re": "^WinRAR \\d"}', 60),
+  ('acrobat_reader', 'Adobe Acrobat Reader', 'adobe:acrobat_reader_dc', '{"name_re": "^Adobe Acrobat Reader( DC)?( \\(64-bit\\))?$"}', 70),
+  ('acrobat', 'Adobe Acrobat', 'adobe:acrobat_dc', '{"name_re": "^Adobe Acrobat( DC| \\(64-bit\\))?$"}', 80),
+  ('notepadpp', 'Notepad++', 'notepad-plus-plus:notepad\+\+', '{"name_re": "^Notepad\\+\\+"}', 90),
+  ('putty', 'PuTTY', 'putty:putty', '{"name_re": "^PuTTY release", "version_from": "name", "version_re": "release ([0-9.]+)"}', 100),
+  ('filezilla', 'FileZilla Client', 'filezilla-project:filezilla_client', '{"name_re": "^FileZilla( Client)? \\d"}', 110),
+  ('vlc', 'VLC media player', 'videolan:vlc_media_player', '{"name_re": "^VLC media player"}', 120),
+  ('teamviewer', 'TeamViewer', 'teamviewer:teamviewer', '{"name_re": "^TeamViewer( \\d+)?$"}', 130),
+  ('anydesk', 'AnyDesk', 'anydesk:anydesk', '{"name_re": "^AnyDesk"}', 140),
+  ('wireshark', 'Wireshark', 'wireshark:wireshark', '{"name_re": "^Wireshark \\d"}', 150),
+  ('winscp', 'WinSCP', 'winscp:winscp', '{"name_re": "^WinSCP \\d"}', 160),
+  ('php', 'PHP', 'php:php', '{"name_re": "^PHP \\d"}', 170),
+  ('python', 'Python', 'python:python', '{"name_re": "^Python 3\\.\\d+\\.\\d+ \\(", "exclude_re": "Launcher|Documentation|Test Suite|Development|Executables|Utility|Standard Library|Tcl|pip|Add to Path|Core Interpreter"}', 180),
+  ('nodejs', 'Node.js', 'nodejs:node.js', '{"name_re": "^Node\\.js$"}', 190),
+  ('git', 'Git for Windows', 'git-scm:git', '{"name_re": "^Git$"}', 200),
+  ('openssl', 'OpenSSL', 'openssl:openssl', '{"name_re": "^OpenSSL\\b"}', 210),
+  ('veeam_br', 'Veeam Backup & Replication', 'veeam:veeam_backup_\&_replication', '{"name_re": "^Veeam Backup & Replication( Server)?$"}', 220);

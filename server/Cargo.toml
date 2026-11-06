@@ -1,0 +1,76 @@
+[package]
+name = "msp-console"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DTC-Inc/msp-security-console"
+description = "MSP Security Console server: its own store and connectors, sign-in, the evidence contract, the web app"
+
+[[bin]]
+name = "msp-console"
+path = "src/main.rs"
+
+[[bin]]
+name = "contract-schema"
+path = "src/bin/contract_schema.rs"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net", "time", "signal", "fs", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pure-Rust crypto everywhere. The one C in the build is SQLite, compiled from sqlx's bundled source by the builder's cc.
+jsonwebtoken = { version = "11.1", default-features = false, features = ["rust_crypto"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "http2", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tower-http = { version = "0.7", features = ["fs", "set-header", "limit"] }
+schemars = "1.2"
+ipnet = "2.12"
+getrandom = "0.3"
+# OIDC (rev 3.1): the session is an authenticated, encrypted cookie; PKCE is S256.
+chacha20poly1305 = "0.11"
+hkdf = "0.13"
+sha2 = "0.11"
+base64 = "0.23"
+serde_urlencoded = "0.7"
+# Its own store: one SQLite file on the console's own volume, through sqlx with SQLite bundled (statically
+# linked, so the distroless image needs nothing more), or a PostgreSQL database the installer runs. Runtime-checked
+# queries only (the build needs no database); migrations embedded in the binary, one set per store. PostgreSQL's TLS is
+# rustls on ring, verifying against the platform's roots (or the URL's sslrootcert), like the HTTP client's.
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "postgres", "tls-rustls-ring-native-roots", "migrate", "macros", "json", "chrono"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+regex = "1.13"
+# Vector search (sqlite-vec): its C source compiled in by cc and registered as an auto-extension on every connection
+# (db::register_vec), so the single container needs no loadable module. libsqlite3-sys is sqlx's own, named only to
+# reach sqlite3_auto_extension; its version must stay the one sqlx locks.
+sqlite-vec = "=0.1.9"
+libsqlite3-sys = { version = "0.37", default-features = false }
+# The embedder (src/embed.rs): bge-small-en-v1.5 on ONNX Runtime, in this process, so a CVE description never leaves
+# the console. ort links ONNX Runtime 1.31 statically from pyke's prebuilt archive (download-binaries), which ort-sys
+# pins by SHA-256 in its own dist table, and Cargo.lock pins ort-sys; that archive needs glibc and libstdc++, which is
+# why the image is distroless/cc. ndarray, tracing and the default native TLS are left out: the build script fetches
+# over rustls. The tokenizer is Hugging Face's, pure Rust: fancy-regex in place of the Oniguruma C library.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls", "api-31"] }
+tokenizers = { version = "0.22.2", default-features = false, features = ["fancy-regex"] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+# On a Mac (development only), pyke ships ONNX Runtime with CoreML compiled in and nothing without it, so the build
+# has to ask for that one. The console never registers CoreML: inference runs on the CPU there too.
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["coreml"] }
+
+[dev-dependencies]
+# Test keys are generated at test time, never committed.
+rsa = { version = "0.9.10", features = ["pem"] }
+rand = "0.8"
+jsonwebtoken = { version = "11.1", default-features = false, features = ["rust_crypto", "use_pem"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+libc = "0.2"
+
+# Thin LTO: most of the size and speed of fat LTO, at a fraction of the link memory, so the image builds on a
+# small builder (fat LTO was killed in a 2 GiB podman VM).
+[profile.release]
+lto = "thin"
+strip = true

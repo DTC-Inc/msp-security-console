@@ -1,0 +1,74 @@
+# The console on one host (docs/design.md, "Deploying it yourself"): one container, its store a SQLite file on the
+# msp-console-data volume (put Docker's volumes on an encrypted disk: the file holds your clients' inventory). Two ways
+# to configure it (with Podman, read `podman compose` wherever this says `docker compose`):
+#   - guided: `docker compose up --build`, read the one-time token with `docker compose logs console`, open
+#     http://localhost:8080/setup, and work through the wizard (the database, sign-in, the connectors), testing each
+#     section live. The settings land in the msp-console-config volume, their secrets encrypted under a master key the
+#     first save makes in the msp-console-key volume. Back the two volumes up separately: whoever has both has the
+#     secrets, and losing the key means entering them again. Or set CONSOLE_MASTER_KEY in .env and no key file is made.
+#   - by environment: put the settings in .env (they always win over the file). See docs/design.md for each mode.
+# The connectors (NinjaOne, HaloPSA; NVD and CISA KEV are public) are set in the wizard or in .env: see docs/design.md.
+# The store is the SQLite file on msp-console-data by default. For PostgreSQL instead, see the postgres service below.
+# For a quick look with made-up vendors and no sign-in: `docker compose --profile demo up --build` and open
+# http://localhost:8081 (AUTH_MODE=dev_insecure, which refuses to run in Kubernetes or production).
+services:
+  console:
+    build: .
+    env_file: [{ path: .env, required: false }]
+    ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    # The store (and its daily copies in /data/backup), the settings the setup wizard saves, and the master key that
+    # encrypts their secrets, on a volume of its own.
+    volumes: ["msp-console-data:/data", "msp-console-config:/var/lib/msp-console", "msp-console-key:/var/lib/msp-console-key"]
+    restart: unless-stopped
+  # PostgreSQL instead of the SQLite file, FOR DEVELOPMENT ONLY as written: uncomment this service and its volume, add
+  # `depends_on: [postgres]` to the console, set POSTGRES_PASSWORD (long and random) and MSP_ENV=development in .env,
+  # and give the console its URL, in the wizard or in .env:
+  #   DATABASE_URL=postgres://console:<the same password>@postgres:5432/console?sslmode=require
+  # It turns on the database image's own self-signed ("snakeoil") certificate, so the link is encrypted but nothing
+  # checks who answers, which production (the image's default, MSP_ENV=production) refuses. For production, give the
+  # database a certificate for its host name from a CA you hold, mount that CA's certificate into the console, and use
+  #   DATABASE_URL=postgres://console:<password>@postgres:5432/console?sslmode=verify-full&sslrootcert=/run/db-ca/ca.pem
+  # or a managed PostgreSQL with sslmode=verify-full and its published CA. This image carries pgvector, for similar-CVE
+  # search. The console makes no copies of a PostgreSQL database: back the volume up, or pg_dump it. Put the volume
+  # on an encrypted disk.
+  # postgres:
+  #   image: docker.io/pgvector/pgvector:pg17
+  #   environment: { POSTGRES_USER: console, POSTGRES_DB: console, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}" }
+  #   command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem", "-c", "ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key"]
+  #   volumes: ["msp-console-postgres:/var/lib/postgresql/data"]
+  #   restart: unless-stopped
+  # Cloudflare Access in front, outbound only: set TUNNEL_TOKEN in .env, AUTH_MODE=proxy, PROXY_KIND=cloudflare_access.
+  # cloudflared:
+  #   image: docker.io/cloudflare/cloudflared:2026.10.4
+  #   command: tunnel --no-autoupdate run
+  #   environment: { TUNNEL_TOKEN: "${TUNNEL_TOKEN}" }
+  #   restart: unless-stopped
+  demo:
+    profiles: [demo]
+    build: .
+    environment: { MSP_ENV: development, AUTH_MODE: dev_insecure,
+                   NINJA_BASE_URL: "http://mock:8090/ninja", NINJA_CLIENT_ID: demo, NINJA_CLIENT_SECRET: demo-only,
+                   HALO_BASE_URL: "http://mock:8090/halo/api", HALO_CLIENT_ID: demo, HALO_CLIENT_SECRET: demo-only,
+                   HALO_TICKET_TYPE_ID: "31", HALO_TICKET_STATUS_ID: "1", HALO_TICKET_PRIORITY_ID: "3",
+                   BLACKPOINT_BASE_URL: "http://mock:8090/blackpoint", BLACKPOINT_API_TOKEN: demo-only,
+                   SHODAN_URL: "http://mock:8090/shodan", SHODAN_API_KEY: demo-only,
+                   NVD_URL: "http://mock:8090/nvd", KEV_URL: "http://mock:8090/kev.json",
+                   NVD_FEED_URL: "http://mock:8090/nvd-feeds", MSRC_URL: "http://mock:8090/msrc" }
+    ports: ["127.0.0.1:8081:8080"]
+    read_only: true
+    volumes: ["msp-console-demo:/data"]
+    depends_on: { mock: { condition: service_started } }
+  mock:
+    profiles: [demo]
+    image: docker.io/oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598
+    working_dir: /src
+    volumes: ["./dev:/src:ro"]
+    environment: { PORT: "8090" }
+    command: ["bun", "mock-vendors.ts"]
+volumes:
+  msp-console-data: {}
+  msp-console-config: {}
+  msp-console-key: {}
+  msp-console-demo: {}
+  # msp-console-postgres: {}

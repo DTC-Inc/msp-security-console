@@ -1,0 +1,11 @@
+# The console's store: one SQLite file and its daily copies (/data/backup). ReadWriteOnce, for the one replica.
+# It holds the MSP's clients' inventory, so it must be encrypted at rest: the storage class decides that, and the
+# overlay names one that is (on AKS, Azure managed disks are encrypted at rest by default; elsewhere, choose a class
+# that encrypts). The copies here undo a bad write, not the loss of the volume: snapshot it too. With PostgreSQL the
+# console keeps nothing on a volume, and an overlay deletes this claim.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: msp-security-console-data }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }

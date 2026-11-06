@@ -1,0 +1,22 @@
+# Placeholders: the overlay sets the real values (docs/design.md, "Identity", "Connectors" and "Deploying it yourself").
+# The server refuses to start while the chosen mode's settings are missing. Secrets (the vendors' client secrets, the
+# NVD key, an OIDC client secret, SESSION_KEY) go in the Secret, never here. SQLite's store needs none: it's a file on
+# the console's own volume (pvc.yaml). PostgreSQL's DATABASE_URL carries its password, so it's the Secret's
+# database-url, read as DATABASE_URL_FILE, never a ConfigMap value.
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: msp-security-console }
+data:
+  # The connectors: each is off until its settings are all there (the secret halves are in the Secret).
+  NINJA_BASE_URL: ""          # https://app.ninjarmm.com (or your region's: eu., ca., oc.)
+  NINJA_CLIENT_ID: ""
+  HALO_BASE_URL: ""           # https://<your halo>/api
+  HALO_CLIENT_ID: ""
+  HALO_REQUESTS_PER_5MIN: "150"   # your share of the tenant's 700 per 5 minutes, shared with every other integration
+  AUTH_MODE: "proxy"          # proxy | oidc (oidc also needs OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_ALLOWED_GROUP, PUBLIC_URL here,
+                              #   and OIDC_CLIENT_SECRET and SESSION_KEY in the Secret)
+  PROXY_KIND: "cloudflare_access"   # cloudflare_access | trusted_header
+  ACCESS_TEAM_DOMAIN: ""      # <team>.cloudflareaccess.com
+  ACCESS_AUD: ""              # the Access application's audience tag
+  BACKUP_KEEP: "7"            # daily copies of the SQLite store kept in /data/backup (ignored, with a warning, on PostgreSQL)
+  EMBED_THREADS: "1"          # the embedder's ONNX Runtime threads: one, since the pod's CPU limit is half a core (deployment.yaml)

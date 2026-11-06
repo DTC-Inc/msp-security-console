@@ -1,0 +1,1 @@
+{ "name": "@msp/contract", "version": "1.0.0", "private": true, "license": "(MIT OR Apache-2.0)", "type": "module", "main": "src/index.ts" }

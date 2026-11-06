@@ -1,0 +1,19 @@
+{
+  "name": "msp-security-console",
+  "private": true,
+  "license": "(MIT OR Apache-2.0)",
+  "workspaces": [
+    "web",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test packages web",
+    "tokens": "bun packages/tokens/gen.ts",
+    "tokens:check": "bun packages/tokens/gen.ts --check",
+    "contract": "cargo run --quiet --manifest-path server/Cargo.toml --bin contract-schema > packages/contract/contract.schema.json && bun packages/contract/gen.ts",
+    "contract:check": "bun packages/contract/gen.ts --check",
+    "dev:mock": "bun dev/mock-vendors.ts",
+    "build:web": "cd web && bun run build",
+    "typecheck": "cd web && bun run typecheck"
+  }
+}

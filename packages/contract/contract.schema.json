@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "Decide": {
+      "enum": [
+        "accept",
+        "reject",
+        "reopen"
+      ],
+      "type": "string"
+    },
+    "DeviceClass": {
+      "enum": [
+        "server",
+        "desktop",
+        "laptop",
+        "other"
+      ],
+      "type": "string"
+    },
+    "Has": {
+      "enum": [
+        "product",
+        "software"
+      ],
+      "type": "string"
+    },
+    "Params": {
+      "additionalProperties": false,
+      "properties": {
+        "advisory_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "critical": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cve_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cvss_min": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "detection_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "device_class": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceClass"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "has": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Has"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "include_closed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "include_edge": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ip": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kev": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "msa": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "org_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "product_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "q": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running_only": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "seen": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source": {
+          "items": {
+            "$ref": "#/$defs/Source"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "state": {
+          "description": "A state to filter by, and it means something different per op; every other op refuses it.\n`windows.devices`: a patch state (vulnerable | unknown | untracked | patched).\n`processes.list`: a binary's trust (invalid | unsigned | unchecked | unhashed | valid).\n`processes.review`: a review's status (pending | accepted | rejected).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tenant_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ReadOp": {
+      "enum": [
+        "cves.list",
+        "devices.list",
+        "clients.list",
+        "cve.get",
+        "cve.products",
+        "cve.devices",
+        "cve.similar",
+        "device.get",
+        "device.cves",
+        "device.products",
+        "product.get",
+        "product.versions",
+        "product.devices",
+        "client.get",
+        "search",
+        "clients.overview",
+        "products.list",
+        "coverage.list",
+        "coverage.devices",
+        "device.software",
+        "advisories.list",
+        "detections.list",
+        "detection.get",
+        "blackpoint.tenants",
+        "darkweb.list",
+        "exposure.list",
+        "exposure.get",
+        "windows.devices",
+        "windows.cves",
+        "processes.list",
+        "processes.review",
+        "version.cves"
+      ],
+      "type": "string"
+    },
+    "ReviewDecision": {
+      "additionalProperties": false,
+      "description": "A person's decision on a name the automatic mapping wouldn't decide (`POST /api/review`): accept one of its\ncandidates as the NVD product it is, reject the name (never matched), or reopen it. Strict like the reads.",
+      "properties": {
+        "company": {
+          "default": "",
+          "type": "string"
+        },
+        "cpe": {
+          "description": "The accepted candidate, as vendor:product; only with accept.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decision": {
+          "$ref": "#/$defs/Decide"
+        },
+        "kind": {
+          "$ref": "#/$defs/ReviewKind"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "decision"
+      ],
+      "title": "ReviewDecision",
+      "type": "object"
+    },
+    "ReviewKind": {
+      "enum": [
+        "process",
+        "software"
+      ],
+      "type": "string"
+    },
+    "Source": {
+      "enum": [
+        "ninja_software",
+        "process",
+        "msrc",
+        "blackpoint",
+        "advisory"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "op": {
+      "$ref": "#/$defs/ReadOp"
+    },
+    "params": {
+      "$ref": "#/$defs/Params",
+      "default": {}
+    }
+  },
+  "required": [
+    "op"
+  ],
+  "title": "EvidenceRequest",
+  "type": "object"
+}

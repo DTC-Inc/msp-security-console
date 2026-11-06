@@ -1,0 +1,100 @@
+# Tests and the web build on every PR; on dev and main, the image to GHCR (deployments pin it by digest). Actions are
+# pinned by commit; the comment says which release.
+name: ci
+on:
+  pull_request:
+  push: { branches: [dev, main] }
+permissions: { contents: read }
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    # The store's tests run on both stores: a SQLite file each (nothing to start), and a database each on this
+    # PostgreSQL, which carries pgvector. REQUIRE_DB makes a PostgreSQL test that can't run a failure, never a skip.
+    services:
+      postgres:
+        # pgvector 0.8 on PostgreSQL 17, pinned by its multi-platform index; bump it on purpose.
+        image: docker.io/pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+        env: { POSTGRES_PASSWORD: ci-only-throwaway }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    # The embedder's tests run the real model through ONNX Runtime: the pinned files are fetched (and checked against
+    # their SHA-256s) to the cache the tests read, and REQUIRE_MODEL makes a model test that can't run a failure.
+    env:
+      TEST_DATABASE_URL: postgres://postgres:ci-only-throwaway@127.0.0.1:5432/postgres
+      REQUIRE_DB: "1"
+      REQUIRE_MODEL: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy && rustup default 1.99.1
+      - run: scripts/fetch-model.sh
+      - run: cargo test --locked --manifest-path server/Cargo.toml
+      - run: cargo clippy --locked --manifest-path server/Cargo.toml --all-targets -- -D warnings
+      # The contract's one source: the schema the client's types come from must be what the Rust types say.
+      - run: cargo run --quiet --locked --manifest-path server/Cargo.toml --bin contract-schema > /tmp/schema.json && diff -u packages/contract/contract.schema.json /tmp/schema.json
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version: 1.4.3 }
+      # The contract's and tokens' generated code, and the Solid web app in web/ (its API client, the setup wizard's
+      # rules, and a production build of its own); then the build the image ships, which must have its index.html.
+      # compose.yaml must parse under the Compose spec as Docker and Podman read it (a mapping for env_file once
+      # broke `podman compose` while CI stayed green), in both its default and demo profiles.
+      - run: docker compose -f compose.yaml config -q && docker compose -f compose.yaml --profile demo config -q
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bun run contract:check
+      - run: bun run typecheck
+      - run: bun run build:web
+      - run: test -s web/dist/index.html
+  # The endpoint scripts MSPs deploy (endpoint/README.md). pwsh comes with the runner; the harness fails unless its tests ran.
+  endpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: pwsh -NoProfile -File endpoint/process/scripts/test-process-inventory.ps1
+  # The image builds on every PR too (SQLite and ONNX Runtime are C and C++ linked into the binary, and the model is a
+  # pinned download: a PR finds out it builds), and is pushed only from dev and main.
+  image:
+    needs: [server, test, endpoint]
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        if: github.event_name == 'push'
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          # On a PR it's loaded for the smoke test below, never pushed. A PR's ref name (22/merge) can't be a tag.
+          push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name != 'push' }}
+          tags: ghcr.io/dtc-inc/msp-security-console:${{ github.event_name == 'push' && format('{0}-{1}', github.ref_name, github.sha) || format('pr-{0}', github.sha) }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      # The image as compose runs it: read-only, fresh named volumes. The store must open and migrate on /data as the
+      # console's user, and the config and key volumes (where setup saves) must be the console user's and writable by it.
+      - name: Smoke test the image on fresh Docker volumes
+        if: github.event_name != 'push'
+        env: { IMG: "ghcr.io/dtc-inc/msp-security-console:pr-${{ github.sha }}" }
+        run: |
+          docker run -d --name smoke --read-only -e MSP_ENV=development -e AUTH_MODE=dev_insecure \
+            -v smoke-data:/data -v smoke-config:/var/lib/msp-console -v smoke-key:/var/lib/msp-console-key -p 8080:8080 "$IMG"
+          for i in $(seq 1 30); do curl -sf localhost:8080/readyz && break; sleep 1; done
+          docker logs smoke
+          curl -sf localhost:8080/readyz
+          # The embedder loaded the baked-in model on a read-only root filesystem, and its job is scheduled.
+          curl -sf localhost:8080/api/status | jq -e '.embedder.on == true and .embedder.model == "bge-small-en-v1.5-int8"'
+          docker logs smoke 2>&1 | grep -q '"msg":"embedder loaded"'
+
+          BB=docker.io/library/busybox:1.37
+          docker run --rm -v smoke-data:/d -v smoke-config:/c $BB sh -c 'ls -ln /d; echo "data: $(stat -c %u:%g /d)  config: $(stat -c %u:%g /c)"'
+          test "$(docker run --rm -v smoke-data:/d $BB stat -c %u:%a /d/console.db)" = "65532:600"
+          test "$(docker run --rm -v smoke-data:/d -v smoke-config:/c -v smoke-key:/k $BB stat -c %u:%g /d /c /k | sort -u)" = "65532:65532"
+          test "$(docker run --rm -v smoke-key:/k $BB stat -c %a /k)" = "700"
+          docker run --rm --user 65532:65532 -v smoke-config:/c -v smoke-key:/k $BB sh -c 'touch /c/.write-probe /k/.write-probe'
+      - if: github.event_name == 'push'
+        run: echo "Image digest for Argo ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"

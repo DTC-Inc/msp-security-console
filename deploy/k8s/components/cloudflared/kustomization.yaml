@@ -1,0 +1,5 @@
+# cloudflared in the namespace, outbound only: the tunnel carries the Access-
+# protected hostname to the Service, so the cluster exposes nothing. The tunnel token is the Secret's tunnel-token key.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources: [deployment.yaml]

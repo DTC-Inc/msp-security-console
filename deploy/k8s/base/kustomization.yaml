@@ -1,0 +1,13 @@
+# MSP Security Console, the Kubernetes base (design rev 6): the SQLite store, one replica. For PostgreSQL and more
+# replicas, the overlay's patch is in docs/design.md, "Deploying it yourself". Your overlay sets the namespace, the image digest, the
+# ConfigMap's values, the Secret and the PVC's (encrypted) storage class, and turns on one way in: components/cloudflared
+# or components/ingress.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs: { app.kubernetes.io/name: msp-security-console }
+    includeSelectors: true
+resources: [deployment.yaml, service.yaml, configmap.yaml, networkpolicy.yaml, pvc.yaml]
+images:
+  - name: msp-security-console
+    newName: ghcr.io/dtc-inc/msp-security-console

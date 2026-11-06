@@ -1,0 +1,9 @@
+node_modules/
+web/dist/
+out/
+*.log
+.env*
+target/
+# The embedding model is a pinned download (scripts/fetch-model.sh), kept outside the repo; never commit one.
+models/
+*.onnx
