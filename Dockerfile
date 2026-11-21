@@ -31,12 +31,14 @@ RUN mkdir -p /out/data /out/config /out/keyparent/msp-console-key && chmod 700 /
 # The embedding model: two files from Hugging Face at pinned revisions, each checked against its pinned SHA-256; a
 # mismatch fails the build. Read-only to everyone, writable by no one at run time (the root filesystem is read-only).
 # And the licences that travel with what the image carries (ONNX Runtime's, with its third-party notices; the model's;
-# the tokenizer library's), each at a pinned commit and SHA-256 the same way (scripts/fetch-licenses.sh).
+# the tokenizer library's), each at a pinned commit and SHA-256 the same way (scripts/fetch-licenses.sh); ONNX Runtime's
+# two files are vendored in third-party-licences/ and checked against the same pins.
 FROM docker.io/library/rust:1.99.1-trixie@sha256:bc2c4c21d4467cdbbac0ee7b95a6deb742a3467dfe0ff7647916c4b42ca56372 AS model
 COPY scripts/fetch-model.sh scripts/fetch-licenses.sh /
 RUN sh /fetch-model.sh /models/bge-small-en-v1.5-int8 && chmod 755 /models /models/bge-small-en-v1.5-int8 && chmod 444 /models/bge-small-en-v1.5-int8/*
 COPY THIRD_PARTY.md /licenses/THIRD_PARTY.md
-RUN sh /fetch-licenses.sh /licenses && find /licenses -type d -exec chmod 755 {} + && find /licenses -type f -exec chmod 444 {} +
+COPY third-party-licences /vendored-licenses
+RUN sh /fetch-licenses.sh /licenses /vendored-licenses && find /licenses -type d -exec chmod 755 {} + && find /licenses -type f -exec chmod 444 {} +
 
 # The licence of every Rust crate linked into the binary, from Cargo.lock, by cargo-about (pinned, installed --locked).
 # Any crate whose licence isn't on server/about.toml's list fails the build (--fail).

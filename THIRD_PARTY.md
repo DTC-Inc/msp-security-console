@@ -9,7 +9,7 @@ each licence's text, in `/licenses/web.txt`, which the image build generates fro
 `scripts/web-licenses.ts`; the build fails if any package's licence isn't on that script's list (the same as
 `server/about.toml`'s, plus 0BSD), or if a package ships no licence file. This file covers the rest: the embedding
 model, and ONNX Runtime, which is linked into the binary. In the image, under `/licenses` (each file fetched at a
-pinned commit and checked against a pinned SHA-256 by `scripts/fetch-licenses.sh`; a mismatch fails the build):
+pinned commit and checked against a pinned SHA-256 by `scripts/fetch-licenses.sh`, except ONNX Runtime's two files, which are vendored in `third-party-licences/onnxruntime/` and checked against the same kind of pin; a mismatch fails the build):
 
 | Path | What |
 |---|---|
@@ -82,7 +82,8 @@ SOFTWARE.
   Cargo.lock pins ort-sys by checksum, so the build can't take a different archive.
 - **Licence:** MIT (below). ONNX Runtime itself contains third-party code (among others protobuf, abseil, RE2, the ONNX
   project, cpuinfo, Eigen, flatbuffers), whose notices are ONNX Runtime's `ThirdPartyNotices.txt` for v1.31.0. pyke's
-  archive holds only the library, so the image build fetches that file from the tag and ships it at
+  archive holds only the library, so the image ships that file, vendored in `third-party-licences/onnxruntime/`
+  (byte for byte the v1.31.0 file; the SHA-256 is pinned in `scripts/fetch-licenses.sh`), at
   `/licenses/onnxruntime/ThirdPartyNotices.txt`.
 - **KleidiAI, on arm64:** pyke's arm64 archive (`aarch64-unknown-linux-gnu`, SHA-256 `380c1b63…4709`) links Arm's
   KleidiAI micro-kernels (its `kai_` symbols are in `libonnxruntime.a`; checked 2026-11-05), which ONNX Runtime 1.31
